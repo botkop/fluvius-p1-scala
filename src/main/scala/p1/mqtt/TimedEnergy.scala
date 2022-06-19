@@ -36,10 +36,10 @@ object TimedEnergy extends App with LazyLogging {
   val interval = config.getInt("mqtt.timed.interval")
 
   val consumerSettings =
-    MqttConnectionSettings(mqttUrl, "p1-mqtt-consumer", new MemoryPersistence)
+    MqttConnectionSettings(mqttUrl, "p1-mqtt-consumer", new MemoryPersistence).withAutomaticReconnect(true)
 
   val producerSettings =
-    MqttConnectionSettings(mqttUrl, "p1-mqtt-producer", new MemoryPersistence)
+    MqttConnectionSettings(mqttUrl, "p1-mqtt-producer", new MemoryPersistence).withAutomaticReconnect(true)
 
   val mqttSource = MqttSource.atMostOnce(
     consumerSettings,
