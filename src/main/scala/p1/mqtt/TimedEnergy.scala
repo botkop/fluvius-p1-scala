@@ -34,12 +34,16 @@ object TimedEnergy extends App with LazyLogging {
   val mqttSourceTopic = config.getString("mqtt.timed.topics.source")
   val mqttTargetTopic = config.getString("mqtt.timed.topics.target")
   val interval = config.getInt("mqtt.timed.interval")
+  val consumerId = config.getString("mqtt.timed.consumer-id")
+  val producerId = config.getString("mqtt.timed.producer-id")
 
   val consumerSettings =
-    MqttConnectionSettings(mqttUrl, "p1-mqtt-consumer", new MemoryPersistence).withAutomaticReconnect(true)
+    MqttConnectionSettings(mqttUrl, consumerId, new MemoryPersistence)
+      .withAutomaticReconnect(true)
 
   val producerSettings =
-    MqttConnectionSettings(mqttUrl, "p1-mqtt-producer", new MemoryPersistence).withAutomaticReconnect(true)
+    MqttConnectionSettings(mqttUrl, producerId, new MemoryPersistence)
+      .withAutomaticReconnect(true)
 
   val mqttSource = MqttSource.atMostOnce(
     consumerSettings,
@@ -49,12 +53,10 @@ object TimedEnergy extends App with LazyLogging {
 
   val mqttSink = MqttSink(producerSettings, MqttQoS.AtLeastOnce)
 
-  val seconds = interval * 60
-  // val seconds = 2
   mqttSource
     .map(msg => parse(msg.payload.utf8String))
     .map(Energy.apply)
-    .groupedWithin(seconds + 5, FiniteDuration(seconds, TimeUnit.SECONDS))
+    .groupedWithin(interval + 5, FiniteDuration(interval, TimeUnit.SECONDS))
     .map { list =>
       val production = list.map(_.production).sum / list.size
       val consumption = list.map(_.consumption).sum / list.size
