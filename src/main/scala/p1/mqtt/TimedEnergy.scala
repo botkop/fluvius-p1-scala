@@ -31,6 +31,8 @@ object TimedEnergy extends App with LazyLogging {
 
   val config = ConfigFactory.load()
   val mqttUrl = config.getString("mqtt.url")
+  val mqttUser = config.getString("mqtt.user")
+  val mqttPassword = config.getString("mqtt.password")
   val mqttSourceTopic = config.getString("mqtt.timed.topics.source")
   val mqttTargetTopic = config.getString("mqtt.timed.topics.target")
   val interval = config.getInt("mqtt.timed.interval")
@@ -40,10 +42,12 @@ object TimedEnergy extends App with LazyLogging {
   val consumerSettings =
     MqttConnectionSettings(mqttUrl, consumerId, new MemoryPersistence)
       .withAutomaticReconnect(true)
+      .withAuth(mqttUser, mqttPassword)
 
   val producerSettings =
     MqttConnectionSettings(mqttUrl, producerId, new MemoryPersistence)
       .withAutomaticReconnect(true)
+      .withAuth(mqttUser, mqttPassword)
 
   val mqttSource = MqttSource.atMostOnce(
     consumerSettings,
@@ -77,8 +81,8 @@ case class Energy(production: Double, consumption: Double) {
 case object Energy {
   implicit val formats = DefaultFormats
   def apply(json: JValue): Energy = {
-    val production = (json \ "1-0:22.7.0" \ "value").extract[Double]
-    val consumption = (json \ "1-0:21.7.0" \ "value").extract[Double]
+    val production = (json \ "CURRENT_ELECTRICITY_DELIVERY" \ "value").extract[Double]
+    val consumption = (json \ "CURRENT_ELECTRICITY_USAGE" \ "value").extract[Double]
     Energy(production, consumption)
   }
 }
