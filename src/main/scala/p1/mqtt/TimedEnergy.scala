@@ -79,8 +79,8 @@ object TimedEnergy extends App with LazyLogging {
     .log("timed-energy")
     .addAttributes(Attributes.logLevels(onElement = Attributes.LogLevels.Info))
     .map(energy => MqttMessage(mqttTargetTopic, energy.toBytes))
-    // .runWith(mqttSink)
-    .runForeach(msg => println(msg.payload.utf8String))
+    .runWith(mqttSink)
+    // .runForeach(msg => println(msg.payload.utf8String))
 }
 
 case class Energy(production: Double, consumption: Double) {
