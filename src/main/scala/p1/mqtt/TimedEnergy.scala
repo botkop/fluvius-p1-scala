@@ -21,10 +21,11 @@ import scala.concurrent.duration.FiniteDuration
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import akka.stream.Attributes
+import java.util.Calendar
+import java.time.Duration
 
 object TimedEnergy extends App with LazyLogging {
 
-  logger.info("starting")
 
   implicit val system: ActorSystem = ActorSystem("timed-energy")
   implicit val executionContext = system.dispatcher
@@ -35,7 +36,7 @@ object TimedEnergy extends App with LazyLogging {
   val mqttPassword = config.getString("mqtt.password")
   val mqttSourceTopic = config.getString("mqtt.timed.topics.source")
   val mqttTargetTopic = config.getString("mqtt.timed.topics.target")
-  val interval = config.getInt("mqtt.timed.interval")
+  val intervalSeconds = config.getInt("mqtt.timed.interval")
   val consumerId = config.getString("mqtt.timed.consumer-id")
   val producerId = config.getString("mqtt.timed.producer-id")
 
@@ -57,10 +58,19 @@ object TimedEnergy extends App with LazyLogging {
 
   val mqttSink = MqttSink(producerSettings, MqttQoS.AtLeastOnce)
 
+  val now = java.time.LocalDateTime.now()
+  val nextIntervalMinute = (now.getMinute() * 60 + now.getSecond() + intervalSeconds) / intervalSeconds * intervalSeconds / 60
+  val nextInterval = now.withMinute(nextIntervalMinute).withSecond(0).withNano(0)
+  val millisUntilNextInterval = java.time.Duration.between(now, nextInterval).toMillis() //.getSeconds()
+
+  logger.info("starting")
+  logger.info(s"millis until next interval: $millisUntilNextInterval")
+  Thread.sleep(millisUntilNextInterval)
+
   mqttSource
     .map(msg => parse(msg.payload.utf8String))
     .map(Energy.apply)
-    .groupedWithin(interval + 5, FiniteDuration(interval, TimeUnit.SECONDS))
+    .groupedWithin(intervalSeconds + 5, FiniteDuration(intervalSeconds, TimeUnit.SECONDS))
     .map { list =>
       val production = list.map(_.production).sum / list.size
       val consumption = list.map(_.consumption).sum / list.size
@@ -69,8 +79,8 @@ object TimedEnergy extends App with LazyLogging {
     .log("timed-energy")
     .addAttributes(Attributes.logLevels(onElement = Attributes.LogLevels.Info))
     .map(energy => MqttMessage(mqttTargetTopic, energy.toBytes))
-    .runWith(mqttSink)
-    // .runForeach(msg => println(msg.payload.utf8String))
+    // .runWith(mqttSink)
+    .runForeach(msg => println(msg.payload.utf8String))
 }
 
 case class Energy(production: Double, consumption: Double) {
