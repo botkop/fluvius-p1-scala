@@ -61,17 +61,18 @@ object TimedEnergy extends App with LazyLogging {
   val now = java.time.LocalDateTime.now()
   val nextIntervalMinute = (now.getMinute() * 60 + now.getSecond() + intervalSeconds) / intervalSeconds * intervalSeconds / 60
   val nextInterval = now.withMinute(nextIntervalMinute).withSecond(0).withNano(0)
-  val millisUntilNextInterval = java.time.Duration.between(now, nextInterval).toMillis() //.getSeconds()
+  val millisUntilNextInterval = java.time.Duration.between(now, nextInterval).toMillis()
 
-  logger.info("starting")
   logger.info(s"millis until next interval: $millisUntilNextInterval")
   Thread.sleep(millisUntilNextInterval)
+  logger.info("starting")
 
   mqttSource
-    .map(msg => parse(msg.payload.utf8String))
-    .map(Energy.apply)
-    .groupedWithin(intervalSeconds + 5, FiniteDuration(intervalSeconds, TimeUnit.SECONDS))
+    .map(msg => Energy(parse(msg.payload.utf8String)))
+    .async
+    .groupedWithin(n=intervalSeconds, d=FiniteDuration(intervalSeconds, TimeUnit.SECONDS))
     .map { list =>
+      logger.info(s"group contains ${list.size} elements")
       val production = list.map(_.production).sum / list.size
       val consumption = list.map(_.consumption).sum / list.size
       Energy(production, consumption)
