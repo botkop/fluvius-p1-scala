@@ -59,7 +59,7 @@ object TimedEnergy extends App with LazyLogging {
   val mqttSink = MqttSink(producerSettings, MqttQoS.AtLeastOnce)
 
   val now = java.time.LocalDateTime.now()
-  val nextIntervalMinute = (now.getMinute() * 60 + now.getSecond() + intervalSeconds) / intervalSeconds * intervalSeconds / 60
+  val nextIntervalMinute = Math.min((now.getMinute() * 60 + now.getSecond() + intervalSeconds) / intervalSeconds * intervalSeconds / 60, 59)
   val nextInterval = now.withMinute(nextIntervalMinute).withSecond(0).withNano(0)
   val millisUntilNextInterval = java.time.Duration.between(now, nextInterval).toMillis()
 

@@ -17,6 +17,7 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import scala.collection.mutable.ListBuffer
+import akka.stream.Attributes
 
 object MovingAverageConsumption extends App with LazyLogging {
 
@@ -24,15 +25,22 @@ object MovingAverageConsumption extends App with LazyLogging {
   implicit val executionContext = system.dispatcher
 
   val config = ConfigFactory.load()
+  val platform = config.getString("platform")
+
+  logger.info(f"running on platform: ${platform}")
+
   val mqttUrl = config.getString("mqtt.url")
   val mqttUser = config.getString("mqtt.user")
   val mqttPassword = config.getString("mqtt.password")
-  val mqttSourceTopic = config.getString("mqtt.average.topics.source")
-  val mqttTargetTopic = config.getString("mqtt.average.topics.target")
 
-  val platform = config.getString("platform")
-  val consumerId = f"consumption-moving-average-${platform}"
-  val producerId = f"production-moving-average-${platform}"
+  val mqttSourceTopic =
+    f"${config.getString("mqtt.average.topics.source")}"
+  val mqttTargetTopic =
+    f"${config.getString("mqtt.average.topics.target")}-${platform}"
+  val consumerId =
+    f"${config.getString("mqtt.average.consumer-id")}-${platform}"
+  val producerId =
+    f"${config.getString("mqtt.average.producer-id")}-${platform}"
 
   val consumerSettings =
     MqttConnectionSettings(mqttUrl, consumerId, new MemoryPersistence)
@@ -65,8 +73,9 @@ object MovingAverageConsumption extends App with LazyLogging {
         val n = values.length
         val movingAverage = (values.sum / n) * 1000 // kW -> W
         val dateTime = ZonedDateTime.parse(element.dateTime, formatter)
-        if ((dateTime.getMinute() % 15 == 0) && (dateTime.getSecond() == 0))
+        if ((dateTime.getMinute() % 15 == 0) && (dateTime.getSecond() == 0)) {
           values = new ListBuffer[Double]()
+        }
         AverageConsumption(
           movingAverage,
           element.currentAverageDemand,
@@ -75,9 +84,14 @@ object MovingAverageConsumption extends App with LazyLogging {
         ) :: Nil
       }
     }
-    .map(ac => MqttMessage(mqttTargetTopic, ac.toBytes))
+    .log(name = mqttTargetTopic)
+    .withAttributes(
+      Attributes.logLevels(
+        onElement = Attributes.LogLevels.Info,
+      )
+    )
+    .map(energy => MqttMessage(mqttTargetTopic, energy.toBytes))
     .runWith(mqttSink)
-    // .runForeach(msg => println(msg.payload.utf8String))
 }
 
 case class Consumption(
