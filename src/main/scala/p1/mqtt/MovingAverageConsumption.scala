@@ -67,14 +67,16 @@ object MovingAverageConsumption extends App with LazyLogging {
     .async
     .statefulMapConcat { () =>
       var values = new ListBuffer[Double]()
+      var n = 0
 
       { element =>
+        n += 1
         values += element.currentConsumption
-        val n = values.length
-        val movingAverage = (values.sum / n) * 1000 // kW -> W
+        values = values.drop(values.length - 900)
+        val movingAverage = values.sum / values.length
         val dateTime = ZonedDateTime.parse(element.dateTime, formatter)
         if ((dateTime.getMinute() % 15 == 0) && (dateTime.getSecond() == 0)) {
-          values = new ListBuffer[Double]()
+          n = 0
         }
         AverageConsumption(
           movingAverage,
@@ -115,9 +117,8 @@ case object Consumption {
 case class AverageConsumption(
     movingAverageConsumption: Double,
     cumulativeAverageConsumption: Double,
-    nElements: Int,
+    step: Int,
     timestamp: String,
-    unit: String = "W"
 ) {
   def toJson = write(this)(DefaultFormats)
   def toBytes = ByteString(toJson)
